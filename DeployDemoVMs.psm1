@@ -23,7 +23,7 @@ Function New-VirtualMachine
         [System.Int64]$Memory = 2GB
     )
 
-                                        #region runas administrator
+#region runas administrator
 If (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] 'Administrator'))
 {   
 	Write-Warning 'System: This script is currently not running as administrator. Script will now automatically restart.'
@@ -34,7 +34,7 @@ If (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 }
 #endregion
 
-    #region helper-functions
+#region helper-functions
     Function Show-Dropdownbox 
                                                                                                                                                                                                                                                                                                                                         {
     <#
@@ -140,9 +140,8 @@ If (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     $choices = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
     $Host.UI.PromptForChoice($subject,$Question,$choices,1)
     }
-    #endregion
 
-                                                                                                                                                                                    #region check Hyper-V Role Installed
+#region check Hyper-V Role Installed
 if (((Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V).state) -ne 'Enabled')
 {
     Write-Warning -Message 'Hyper-V: Hyper-V Role has not yet been enabled!'
@@ -191,7 +190,7 @@ else
 }
 #endregion
 
-                                                                            #region check hyper-v switch
+#region check hyper-v switch
 if (!(Get-VMSwitch | Where-Object {$_.name -eq $VirtualSwitchName}))
 {
     Write-Warning "Hyper-V: Switch [$($VirtualSwitchName)] could not be found!"
@@ -212,7 +211,7 @@ else
 
 #endregion
 
-                                        #region snapshot
+#region snapshot
 if ((Read-Question -Question 'Would you like a snapshot for the Virtual Machines?') -eq '0')
 {
     $Snapshot = $true
@@ -223,7 +222,7 @@ else
 }
 #endregion
 
-                                                            #region scanning images from imagelocation
+#region scanning images from imagelocation
 try
 {
     # Get image name
@@ -241,7 +240,7 @@ break
 }
 #endregion
 
-                                                                                                                                    #region create virtual machines
+#region create virtual machines
 else
 {
     foreach ($VM in $VMName)
@@ -274,8 +273,9 @@ else
 
 Write-Verbose -Message 'Deploy Completed!' -Verbose
 pause
-#endregion
 }
+#endregion
+#endregion
 #endregion
 Export-ModuleMember New-VirtualMachine
 
@@ -292,16 +292,28 @@ Function Remove-VirtualMachine
         if (get-vm -Name $VM -ErrorAction SilentlyContinue)
         {
             Write-Information -Message "$($VM): Virtual Machine will be removed!"
-            Remove-VM -Name $VM -Force -ErrorAction Continue -Verbose
+            if ((Get-VM -Name $VM).state -eq 'Running')
+            {
+                $DiskPath = (Get-VM $VM).Path
+                Write-Verbose -Message "$($VM): will be stopped and disks will be removed" -Verbose
+                (Get-VM -Name $VM | ForEach-Object {Stop-VM -VM $_ -Force -Verbose ; Remove-VM -VM $PSItem -Force -Verbose ; Remove-Item -Path $DiskPath -Recurse -Force -Verbose})
+            }
+            else
+            {
+                Write-Verbose -Message "$($VM): disks will be removed" -Verbose
+                (Get-VM -Name $VM | ForEach-Object {Remove-VM -Name $PSItem -Force -Verbose;Remove-Item -Path $DiskPath -Recurse -Force -Verbose})
+            }
+            Write-Verbose -Message "$($VM): Remove Completed!" -Verbose
+            pause
         }
         else
         {
-            Write-Warning -Message "$($VM): No matching Virtual Machine found!" -Verbose
+            Write-Error -Message "$($VM): No matching Virtual Machine found!" -Verbose
             break
  
         }
     }
 }
-Write-Verbose -Message 'Remove Completed!' -Verbose
+
 #endregion
 Export-ModuleMember Remove-Virtualmachine
